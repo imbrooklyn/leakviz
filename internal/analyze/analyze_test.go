@@ -310,7 +310,18 @@ func TestAnalyzeGroupsExactStacksAndAggregatesLabels(t *testing.T) {
 						},
 					},
 				},
-				Findings: []Finding{},
+				Findings: []Finding{
+					{
+						Kind:    FindingDetected,
+						Code:    "blocking_primitive",
+						Message: "Blocking primitive: chan_receive (runtime.chanrecv1).",
+					},
+					{
+						Kind:    FindingDetected,
+						Code:    "runtime_permanent_block",
+						Message: "Runtime reported this goroutine as permanently blocked.",
+					},
+				},
 			},
 		},
 	}
@@ -504,6 +515,78 @@ func TestNormalizeFindingsOrdersAndDeduplicates(t *testing.T) {
 	if empty == nil || len(empty) != 0 {
 		t.Fatalf("normalizeFindings(nil) = %#v, want non-nil empty slice", empty)
 	}
+}
+
+func TestAnalyzeProducesEvidenceBoundedFindings(t *testing.T) {
+	t.Run("known blocker", func(t *testing.T) {
+		analysis, err := Analyze(profile.Snapshot{
+			Leaks: []profile.Leak{{Count: 1, Stack: chanReceiveStack()}},
+		}, Options{})
+		if err != nil {
+			t.Fatalf("Analyze() error = %v", err)
+		}
+		want := []Finding{
+			{
+				Kind:    FindingDetected,
+				Code:    "blocking_primitive",
+				Message: "Blocking primitive: chan_receive (runtime.chanrecv1).",
+			},
+			{
+				Kind:    FindingDetected,
+				Code:    "runtime_permanent_block",
+				Message: "Runtime reported this goroutine as permanently blocked.",
+			},
+		}
+		if !reflect.DeepEqual(analysis.Groups[0].Findings, want) {
+			t.Fatalf("Findings = %#v, want %#v", analysis.Groups[0].Findings, want)
+		}
+	})
+
+	t.Run("unknown blocker", func(t *testing.T) {
+		analysis, err := Analyze(profile.Snapshot{
+			Leaks: []profile.Leak{{
+				Count: 1,
+				Stack: []profile.Frame{{
+					Function: "runtime.mystery",
+					File:     "/usr/local/go/src/runtime/mystery.go",
+					Line:     1,
+				}},
+			}},
+		}, Options{})
+		if err != nil {
+			t.Fatalf("Analyze() error = %v", err)
+		}
+		want := []Finding{
+			{
+				Kind:    FindingDetected,
+				Code:    "runtime_permanent_block",
+				Message: "Runtime reported this goroutine as permanently blocked.",
+			},
+			{
+				Kind:    FindingInspect,
+				Code:    "unknown_blocker",
+				Message: "No supported blocking primitive was identified; inspect the retained stack.",
+			},
+		}
+		if !reflect.DeepEqual(analysis.Groups[0].Findings, want) {
+			t.Fatalf("Findings = %#v, want %#v", analysis.Groups[0].Findings, want)
+		}
+		for _, finding := range analysis.Groups[0].Findings {
+			if finding.Kind == FindingPossibleCause {
+				t.Fatalf("unknown blocker produced a possible cause: %#v", finding)
+			}
+		}
+	})
+
+	t.Run("full evidence function", func(t *testing.T) {
+		got := normalizeFindings(findingsForBlocker(Blocker{
+			Kind:             BlockerChanReceive,
+			EvidenceFunction: "example.com/runtime/runtime.chanrecv1",
+		}))
+		if got[0].Message != "Blocking primitive: chan_receive (example.com/runtime/runtime.chanrecv1)." {
+			t.Fatalf("blocking primitive message = %q, want full evidence function", got[0].Message)
+		}
+	})
 }
 
 func TestAnalyzeCanonicalEmptySlices(t *testing.T) {

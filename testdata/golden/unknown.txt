@@ -1,0 +1,18 @@
+LEAKVIZ ANALYSIS
+Source: unknown.pprof
+Total: 1
+Groups: 1
+
+Group 1
+  Count: 1
+  Exact fingerprint: sha256:79ed6dd31c91f04d773b7ef50599dd4fb812dfa6f25ded465e8bc727ee5b9166
+  Semantic fingerprint: sha256:da10a11e6c15ec66df0b41598059450a0c070c5ef29be0dd3e84eedf4860a8ba
+  Blocker: unknown
+  Evidence: -
+  User frame: -
+  Stack:
+    - runtime.mystery (mystery.go:1)
+  Labels: none
+  Findings:
+    - DETECTED runtime_permanent_block: Runtime reported this goroutine as permanently blocked.
+    - INSPECT unknown_blocker: No supported blocking primitive was identified; inspect the retained stack.

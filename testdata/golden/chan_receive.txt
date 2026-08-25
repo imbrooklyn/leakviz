@@ -1,0 +1,24 @@
+LEAKVIZ ANALYSIS
+Source: localhost:6060
+Total: 22
+Groups: 1
+
+Group 1
+  Count: 22
+  Exact fingerprint: sha256:f9539207a187cde6a8b712278dce01252a531e54a17866d3e80f9ba9f94685bc
+  Semantic fingerprint: sha256:8b77b951c4b986fa99dda710146d0e116cff968e21945bd11cfc8c289ba87d0c
+  Blocker: chan_receive
+  Evidence: runtime.chanrecv1
+  User frame: worker.(*Pool).run (worker.go:87)
+  Stack:
+    - runtime.gopark (proc.go:460)
+    - runtime.chanrecv (chan.go:664)
+    - runtime.chanrecv1 (chan.go:506)
+    - worker.(*Pool).run (worker.go:87)
+  Labels:
+    - tenant: present=22 missing=0
+      - b: 12
+      - a: 10
+  Findings:
+    - DETECTED blocking_primitive: Blocking primitive: chan_receive (runtime.chanrecv1).
+    - DETECTED runtime_permanent_block: Runtime reported this goroutine as permanently blocked.

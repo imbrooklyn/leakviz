@@ -66,7 +66,7 @@ func Analyze(snapshot profile.Snapshot, opts Options) (Analysis, error) {
 					Stack:     cloneStack(leak.Stack),
 					UserFrame: selectUserFrame(leak.Stack, opts),
 					Labels:    make([]LabelKeySummary, 0),
-					Findings:  make([]Finding, 0),
+					Findings:  findingsForBlocker(blocker),
 				},
 				labels: make(map[string]*labelAccumulator),
 			}
@@ -339,4 +339,26 @@ func findingKindRank(kind FindingKind) int {
 	default:
 		return 3
 	}
+}
+
+func findingsForBlocker(blocker Blocker) []Finding {
+	findings := []Finding{
+		{
+			Kind:    FindingDetected,
+			Code:    "runtime_permanent_block",
+			Message: "Runtime reported this goroutine as permanently blocked.",
+		},
+	}
+	if blocker.Kind == BlockerUnknown {
+		return append(findings, Finding{
+			Kind:    FindingInspect,
+			Code:    "unknown_blocker",
+			Message: "No supported blocking primitive was identified; inspect the retained stack.",
+		})
+	}
+	return append(findings, Finding{
+		Kind:    FindingDetected,
+		Code:    "blocking_primitive",
+		Message: fmt.Sprintf("Blocking primitive: %s (%s).", blocker.Kind, blocker.EvidenceFunction),
+	})
 }
