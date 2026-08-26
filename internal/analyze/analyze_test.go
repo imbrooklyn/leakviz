@@ -3,6 +3,7 @@ package analyze
 import (
 	"errors"
 	"math"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -35,24 +36,309 @@ func TestClassifyChanReceive(t *testing.T) {
 	}
 }
 
-func TestClassifyUsesOnlyEnabledExactSymbols(t *testing.T) {
+func TestClassifyFullBlockerStacks(t *testing.T) {
+	fixture, _ := loadGo127SymbolFixture(t)
+	tests := []struct {
+		name      string
+		functions []string
+		want      Blocker
+	}{
+		{
+			name:      "condition variable",
+			functions: []string{"sync.runtime_notifyListWait", "sync.(*Cond).Wait"},
+			want:      Blocker{Kind: BlockerCond, EvidenceFunction: "sync.(*Cond).Wait"},
+		},
+		{
+			name:      "wait group",
+			functions: []string{"runtime.semacquire1", "sync.runtime_SemacquireWaitGroup", "sync.(*WaitGroup).Wait"},
+			want:      Blocker{Kind: BlockerWaitGroup, EvidenceFunction: "sync.(*WaitGroup).Wait"},
+		},
+		{
+			name:      "RW mutex writer",
+			functions: []string{"runtime.semacquire1", fixture["rwmutex_write_slow"], "sync.(*RWMutex).Lock"},
+			want:      Blocker{Kind: BlockerRWMutex, EvidenceFunction: "sync.(*RWMutex).Lock"},
+		},
+		{
+			name:      "RW mutex reader",
+			functions: []string{"runtime.semacquire1", fixture["rwmutex_read_slow"], "sync.(*RWMutex).RLock"},
+			want:      Blocker{Kind: BlockerRWMutex, EvidenceFunction: "sync.(*RWMutex).RLock"},
+		},
+		{
+			name:      "RW mutex writer slow path",
+			functions: []string{"runtime.semacquire1", fixture["rwmutex_write_slow"]},
+			want:      Blocker{Kind: BlockerRWMutex, EvidenceFunction: "sync.runtime_SemacquireRWMutex"},
+		},
+		{
+			name:      "RW mutex reader slow path",
+			functions: []string{"runtime.semacquire1", fixture["rwmutex_read_slow"]},
+			want:      Blocker{Kind: BlockerRWMutex, EvidenceFunction: "sync.runtime_SemacquireRWMutexR"},
+		},
+		{
+			name:      "mutex",
+			functions: []string{"runtime.semacquire1", "internal/sync.runtime_SemacquireMutex", fixture["mutex_slow"], "sync.(*Mutex).Lock"},
+			want:      Blocker{Kind: BlockerMutex, EvidenceFunction: "sync.(*Mutex).Lock"},
+		},
+		{
+			name:      "mutex slow path",
+			functions: []string{"runtime.semacquire1", "internal/sync.runtime_SemacquireMutex", fixture["mutex_slow"]},
+			want:      Blocker{Kind: BlockerMutex, EvidenceFunction: "internal/sync.(*Mutex).lockSlow"},
+		},
+		{
+			name:      "ordinary select",
+			functions: []string{fixture["ordinary_select"]},
+			want:      Blocker{Kind: BlockerSelect, EvidenceFunction: "runtime.selectgo"},
+		},
+		{
+			name:      "zero-case select",
+			functions: []string{fixture["zero_case_select"]},
+			want:      Blocker{Kind: BlockerSelect, EvidenceFunction: "runtime.block"},
+		},
+		{
+			name:      "channel send",
+			functions: []string{"runtime.chansend", "runtime.chansend1"},
+			want:      Blocker{Kind: BlockerChanSend, EvidenceFunction: "runtime.chansend1"},
+		},
+		{
+			name:      "channel receive",
+			functions: []string{"runtime.chanrecv", "runtime.chanrecv1"},
+			want:      Blocker{Kind: BlockerChanReceive, EvidenceFunction: "runtime.chanrecv1"},
+		},
+		{
+			name:      "unknown",
+			functions: []string{"runtime.waitForever"},
+			want:      Blocker{Kind: BlockerUnknown},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			stack := fullBlockerStack(test.functions...)
+			if got := classify(stack); got != test.want {
+				t.Fatalf("classify(%#v) = %#v, want %#v", test.functions, got, test.want)
+			}
+		})
+	}
+}
+
+func TestBlockerRuleTableContract(t *testing.T) {
+	wantKinds := []BlockerKind{
+		BlockerCond,
+		BlockerWaitGroup,
+		BlockerRWMutex,
+		BlockerMutex,
+		BlockerSelect,
+		BlockerChanSend,
+		BlockerChanReceive,
+		BlockerUnknown,
+	}
+	if len(blockerRules) != len(wantKinds) {
+		t.Fatalf("blocker rule count = %d, want %d", len(blockerRules), len(wantKinds))
+	}
+
+	seenSymbols := make(map[string]BlockerKind)
+	for index, rule := range blockerRules {
+		if rule.kind != wantKinds[index] {
+			t.Fatalf("blockerRules[%d].kind = %q, want %q", index, rule.kind, wantKinds[index])
+		}
+		if rule.fallback != (index == len(blockerRules)-1) {
+			t.Fatalf("blockerRules[%d].fallback = %t, want %t", index, rule.fallback, index == len(blockerRules)-1)
+		}
+		if rule.fallback {
+			if len(rule.symbols) != 0 {
+				t.Fatalf("unknown fallback symbols = %#v, want none", rule.symbols)
+			}
+			continue
+		}
+		if len(rule.symbols) == 0 {
+			t.Fatalf("blocker rule %q has no exact symbols", rule.kind)
+		}
+		for _, symbol := range rule.symbols {
+			if symbol == "" {
+				t.Fatalf("blocker rule %q contains an empty symbol", rule.kind)
+			}
+			if previous, exists := seenSymbols[symbol]; exists {
+				t.Fatalf("symbol %q appears in both %q and %q rules", symbol, previous, rule.kind)
+			}
+			seenSymbols[symbol] = rule.kind
+
+			want := Blocker{Kind: rule.kind, EvidenceFunction: symbol}
+			if got := classify([]profile.Frame{{Function: symbol}}); got != want {
+				t.Fatalf("classify(%q) = %#v, want %#v", symbol, got, want)
+			}
+		}
+	}
+}
+
+func TestClassifySpecificPrimitivePrecedence(t *testing.T) {
+	fixture, _ := loadGo127SymbolFixture(t)
+	tests := []struct {
+		name      string
+		functions []string
+		want      Blocker
+	}{
+		{
+			name:      "condition variable over mutex",
+			functions: []string{"sync.(*Mutex).Lock", "sync.(*Cond).Wait"},
+			want:      Blocker{Kind: BlockerCond, EvidenceFunction: "sync.(*Cond).Wait"},
+		},
+		{
+			name:      "wait group over mutex",
+			functions: []string{"sync.(*Mutex).Lock", "sync.(*WaitGroup).Wait"},
+			want:      Blocker{Kind: BlockerWaitGroup, EvidenceFunction: "sync.(*WaitGroup).Wait"},
+		},
+		{
+			name:      "RW mutex over mutex",
+			functions: []string{"sync.(*Mutex).Lock", "sync.(*RWMutex).Lock"},
+			want:      Blocker{Kind: BlockerRWMutex, EvidenceFunction: "sync.(*RWMutex).Lock"},
+		},
+		{
+			name:      "RW mutex slow path over mutex slow path",
+			functions: []string{fixture["mutex_slow"], fixture["rwmutex_write_slow"]},
+			want:      Blocker{Kind: BlockerRWMutex, EvidenceFunction: "sync.runtime_SemacquireRWMutex"},
+		},
+		{
+			name:      "mutex over select",
+			functions: []string{"runtime.selectgo", "sync.(*Mutex).Lock"},
+			want:      Blocker{Kind: BlockerMutex, EvidenceFunction: "sync.(*Mutex).Lock"},
+		},
+		{
+			name:      "select over channel send",
+			functions: []string{"runtime.chansend1", "runtime.selectgo"},
+			want:      Blocker{Kind: BlockerSelect, EvidenceFunction: "runtime.selectgo"},
+		},
+		{
+			name:      "channel send over channel receive",
+			functions: []string{"runtime.chanrecv1", "runtime.chansend1"},
+			want:      Blocker{Kind: BlockerChanSend, EvidenceFunction: "runtime.chansend1"},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := classify(framesForFunctions(test.functions...)); got != test.want {
+				t.Fatalf("classify(%#v) = %#v, want %#v", test.functions, got, test.want)
+			}
+		})
+	}
+}
+
+func TestClassifyRejectsNonblockingAndSimilarSymbols(t *testing.T) {
 	tests := []string{
+		"sync.(*RWMutex).Unlock",
+		"sync.(*RWMutex).RUnlock",
+		"sync.(*RWMutex).rUnlockSlow",
+		"sync.(*RWMutex).TryLock",
+		"sync.(*RWMutex).TryRLock",
+		"sync.(*Mutex).Unlock",
+		"sync.(*Mutex).TryLock",
+		"runtime.gopark",
+		"runtime.semacquire1",
+		"sync.runtime_Semacquire",
+		"sync.runtime_SemacquireWaitGroup",
+		"sync.runtime_notifyListWait",
+		"internal/sync.runtime_SemacquireMutex",
 		"runtime.chanrecv2",
 		"runtime.chanrecv.func1",
-		"github.com/acme/runtime.chanrecv",
+		"runtime.chansend2",
+		"runtime.selectgo.func1",
+		"runtime.blocked",
+		"sync.(*Cond).Waiter",
+		"sync.(*WaitGroup).WaitContext",
+		"sync.(*RWMutex).LockSlow",
+		"sync.(*Mutex).lockSlow",
+		"internal/sync.(*Mutex).lockSlow.func1",
+		"sync.(*Mutex[int]).Lock",
+		"sync.(*RWMutex[example]).RLock",
+		"github.com/acme/runtime.selectgo",
+		"github.com/acme/sync.(*Mutex).Lock",
 		"github.com/acme/worker.chanrecv1",
-		"runtime.chansend",
-		"runtime.selectgo",
-		"sync.(*Mutex).Lock",
 	}
 	for _, function := range tests {
 		t.Run(function, func(t *testing.T) {
-			got := classify([]profile.Frame{{Function: function}})
+			got := classify([]profile.Frame{{Function: function, Inlined: true}})
 			if got != (Blocker{Kind: BlockerUnknown}) {
 				t.Fatalf("classify(%q) = %#v, want unknown", function, got)
 			}
 		})
 	}
+
+	got := classify([]profile.Frame{{Function: "sync.(*Cond).Wait", Inlined: true}})
+	want := Blocker{Kind: BlockerCond, EvidenceFunction: "sync.(*Cond).Wait"}
+	if got != want {
+		t.Fatalf("classify(inlined exact symbol) = %#v, want %#v", got, want)
+	}
+}
+
+func TestGo127SymbolFixture(t *testing.T) {
+	fixture, raw := loadGo127SymbolFixture(t)
+	want := map[string]string{
+		"toolchain":          "go1.27.0",
+		"platform":           "darwin/arm64",
+		"ordinary_select":    "runtime.selectgo",
+		"zero_case_select":   "runtime.block",
+		"rwmutex_write_slow": "sync.runtime_SemacquireRWMutex",
+		"rwmutex_read_slow":  "sync.runtime_SemacquireRWMutexR",
+		"mutex_slow":         "internal/sync.(*Mutex).lockSlow",
+	}
+	if !reflect.DeepEqual(fixture, want) {
+		t.Fatalf("Go 1.27 symbol fixture = %#v, want %#v", fixture, want)
+	}
+	for _, marker := range []string{
+		"src/cmd/compile/internal/walk/select.go",
+		"src/runtime/select.go",
+		"go tool compile -N -l -S",
+		"src/sync/rwmutex.go",
+		"src/sync/mutex.go",
+		"src/internal/sync/mutex.go",
+		"does not authorize prefix matching",
+	} {
+		if !strings.Contains(raw, marker) {
+			t.Fatalf("Go 1.27 symbol fixture missing provenance marker %q", marker)
+		}
+	}
+}
+
+func fullBlockerStack(functions ...string) []profile.Frame {
+	stack := []profile.Frame{{Function: "runtime.gopark", File: "/usr/local/go/src/runtime/proc.go", Line: 460}}
+	stack = append(stack, framesForFunctions(functions...)...)
+	return append(stack, profile.Frame{
+		Function: "github.com/acme/service.wait",
+		File:     "/src/wait.go",
+		Line:     99,
+	})
+}
+
+func framesForFunctions(functions ...string) []profile.Frame {
+	stack := make([]profile.Frame, len(functions))
+	for index, function := range functions {
+		stack[index] = profile.Frame{Function: function, File: "/src/runtime.go", Line: int64(index + 1)}
+	}
+	return stack
+}
+
+func loadGo127SymbolFixture(t *testing.T) (map[string]string, string) {
+	t.Helper()
+	data, err := os.ReadFile("testdata/go1.27-symbols.txt")
+	if err != nil {
+		t.Fatalf("read Go 1.27 symbol fixture: %v", err)
+	}
+
+	fixture := make(map[string]string)
+	for lineNumber, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		key, value, ok := strings.Cut(line, "=")
+		if !ok || key == "" || value == "" {
+			t.Fatalf("invalid Go 1.27 symbol fixture line %d: %q", lineNumber+1, line)
+		}
+		if _, exists := fixture[key]; exists {
+			t.Fatalf("duplicate Go 1.27 symbol fixture key %q", key)
+		}
+		fixture[key] = value
+	}
+	return fixture, string(data)
 }
 
 func TestSelectUserFrame(t *testing.T) {
@@ -587,6 +873,92 @@ func TestAnalyzeProducesEvidenceBoundedFindings(t *testing.T) {
 			t.Fatalf("blocking primitive message = %q, want full evidence function", got[0].Message)
 		}
 	})
+}
+
+func TestFindingsForEveryBlockerUseStableEnglishFacts(t *testing.T) {
+	tests := []struct {
+		name    string
+		blocker Blocker
+		want    []Finding
+	}{
+		{
+			name:    "channel receive",
+			blocker: Blocker{Kind: BlockerChanReceive, EvidenceFunction: "runtime.chanrecv1"},
+		},
+		{
+			name:    "channel send",
+			blocker: Blocker{Kind: BlockerChanSend, EvidenceFunction: "runtime.chansend1"},
+		},
+		{
+			name:    "select",
+			blocker: Blocker{Kind: BlockerSelect, EvidenceFunction: "runtime.selectgo"},
+		},
+		{
+			name:    "mutex",
+			blocker: Blocker{Kind: BlockerMutex, EvidenceFunction: "sync.(*Mutex).Lock"},
+		},
+		{
+			name:    "RW mutex",
+			blocker: Blocker{Kind: BlockerRWMutex, EvidenceFunction: "sync.(*RWMutex).Lock"},
+		},
+		{
+			name:    "condition variable",
+			blocker: Blocker{Kind: BlockerCond, EvidenceFunction: "sync.(*Cond).Wait"},
+		},
+		{
+			name:    "wait group",
+			blocker: Blocker{Kind: BlockerWaitGroup, EvidenceFunction: "sync.(*WaitGroup).Wait"},
+		},
+		{
+			name:    "unknown",
+			blocker: Blocker{Kind: BlockerUnknown},
+			want: []Finding{
+				{
+					Kind:    FindingDetected,
+					Code:    "runtime_permanent_block",
+					Message: "Runtime reported this goroutine as permanently blocked.",
+				},
+				{
+					Kind:    FindingInspect,
+					Code:    "unknown_blocker",
+					Message: "No supported blocking primitive was identified; inspect the retained stack.",
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			want := test.want
+			if test.blocker.Kind != BlockerUnknown {
+				want = []Finding{
+					{
+						Kind:    FindingDetected,
+						Code:    "blocking_primitive",
+						Message: "Blocking primitive: " + string(test.blocker.Kind) + " (" + test.blocker.EvidenceFunction + ").",
+					},
+					{
+						Kind:    FindingDetected,
+						Code:    "runtime_permanent_block",
+						Message: "Runtime reported this goroutine as permanently blocked.",
+					},
+				}
+			}
+
+			got := normalizeFindings(findingsForBlocker(test.blocker))
+			if !reflect.DeepEqual(got, want) {
+				t.Fatalf("findingsForBlocker(%#v) = %#v, want %#v", test.blocker, got, want)
+			}
+			for _, finding := range got {
+				if finding.Kind == FindingPossibleCause {
+					t.Fatalf("blocker %q produced an unsupported possible cause: %#v", test.blocker.Kind, finding)
+				}
+				if strings.Contains(finding.Message, "Fix:") || strings.Contains(finding.Message, "close(") {
+					t.Fatalf("blocker %q produced an automatic repair instruction: %#v", test.blocker.Kind, finding)
+				}
+			}
+		})
+	}
 }
 
 func TestAnalyzeCanonicalEmptySlices(t *testing.T) {

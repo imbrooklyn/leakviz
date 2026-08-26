@@ -1,0 +1,141 @@
+LEAKVIZ ANALYSIS
+Source: all-blockers.pprof
+Total: 8
+Groups: 8
+
+Group 1
+  Count: 1
+  Exact fingerprint: sha256:1614f6948c9aa405bcf4cf4f9fec3ed83954689fdb01fcc62f96597e32480ccf
+  Semantic fingerprint: sha256:7b089deccc0670cf034bf9fd7669b917cda42dfc00a637d42802756fc0a8bbb5
+  Blocker: chan_receive
+  Evidence: runtime.chanrecv1
+  User frame: worker.receive (receive.go:103)
+  Stack:
+    - runtime.gopark (proc.go:460)
+    - runtime.chanrecv (chan.go:664)
+    - runtime.chanrecv1 (chan.go:506)
+    - worker.receive (receive.go:103)
+  Labels: none
+  Findings:
+    - DETECTED blocking_primitive: Blocking primitive: chan_receive (runtime.chanrecv1).
+    - DETECTED runtime_permanent_block: Runtime reported this goroutine as permanently blocked.
+
+Group 2
+  Count: 1
+  Exact fingerprint: sha256:4e833c670eff2f7a7d5c03eaf239d498333999611083db111a45d9e5c14cebef
+  Semantic fingerprint: sha256:95fe09d231175165c8b020dd76d52fd01683f0ad3cea21e5f9ebf2e06e2587a2
+  Blocker: chan_send
+  Evidence: runtime.chansend1
+  User frame: worker.send (send.go:91)
+  Stack:
+    - runtime.gopark (proc.go:460)
+    - runtime.chansend (chan.go:171)
+    - runtime.chansend1 (chan.go:156)
+    - worker.send (send.go:91)
+  Labels: none
+  Findings:
+    - DETECTED blocking_primitive: Blocking primitive: chan_send (runtime.chansend1).
+    - DETECTED runtime_permanent_block: Runtime reported this goroutine as permanently blocked.
+
+Group 3
+  Count: 1
+  Exact fingerprint: sha256:b73f9eedbe8d9699e7e392c28a94a01172fff9cf9e12e16cbf74405c10bd396c
+  Semantic fingerprint: sha256:3dbeca9219ae10b2220963ac27fec5ae26a7e83e9217245d5b01fde37ccf3da0
+  Blocker: select
+  Evidence: runtime.selectgo
+  User frame: worker.waitSelect (select.go:79)
+  Stack:
+    - runtime.gopark (proc.go:460)
+    - runtime.selectgo (select.go:122)
+    - worker.waitSelect (select.go:79)
+  Labels: none
+  Findings:
+    - DETECTED blocking_primitive: Blocking primitive: select (runtime.selectgo).
+    - DETECTED runtime_permanent_block: Runtime reported this goroutine as permanently blocked.
+
+Group 4
+  Count: 1
+  Exact fingerprint: sha256:7857cb82e75a6687e3410e7a1fa48d522b94eaa02a560e2df636d7998201446b
+  Semantic fingerprint: sha256:a3e0d4c4c48a29cee3c9311037d135b5b4ffb40f587bfbfe12c0a6e21ed9fb61
+  Blocker: mutex
+  Evidence: sync.(*Mutex).Lock
+  User frame: worker.lock (mutex.go:67)
+  Stack:
+    - runtime.gopark (proc.go:460)
+    - runtime.semacquire1 (sema.go:192)
+    - sync.runtime_SemacquireMutex (sema.go:95)
+    - sync.(*Mutex).lockSlow (mutex.go:149)
+    - sync.(*Mutex).Lock (mutex.go:46)
+    - worker.lock (mutex.go:67)
+  Labels: none
+  Findings:
+    - DETECTED blocking_primitive: Blocking primitive: mutex (sync.(*Mutex).Lock).
+    - DETECTED runtime_permanent_block: Runtime reported this goroutine as permanently blocked.
+
+Group 5
+  Count: 1
+  Exact fingerprint: sha256:fa7655e16f8181b56d11a1697696064e139e748f146521566625d5f3c32687d4
+  Semantic fingerprint: sha256:736dd1499c2fb2ccfe3790402e9ec7a3479c358aa6c7264fdd58a312399f9376
+  Blocker: rwmutex
+  Evidence: sync.(*RWMutex).Lock
+  User frame: worker.lockShared (rwmutex.go:55)
+  Stack:
+    - runtime.gopark (proc.go:460)
+    - runtime.semacquire1 (sema.go:192)
+    - sync.runtime_SemacquireRWMutex (sema.go:105)
+    - sync.(*RWMutex).Lock (rwmutex.go:151)
+    - worker.lockShared (rwmutex.go:55)
+  Labels: none
+  Findings:
+    - DETECTED blocking_primitive: Blocking primitive: rwmutex (sync.(*RWMutex).Lock).
+    - DETECTED runtime_permanent_block: Runtime reported this goroutine as permanently blocked.
+
+Group 6
+  Count: 1
+  Exact fingerprint: sha256:012efbfbbfeefa1981b61646f47e8098483568dd9c93dc229d5f2b92dc8ba25a
+  Semantic fingerprint: sha256:a6ab52b07d6054bb3c44e101bb9f09697f1f84b5b254c0cfdb3a3f3a63b2f863
+  Blocker: cond
+  Evidence: sync.(*Cond).Wait
+  User frame: worker.waitCond (cond.go:31)
+  Stack:
+    - runtime.gopark (proc.go:460)
+    - sync.runtime_notifyListWait (sema.go:590)
+    - sync.(*Cond).Wait (cond.go:71)
+    - worker.waitCond (cond.go:31)
+  Labels: none
+  Findings:
+    - DETECTED blocking_primitive: Blocking primitive: cond (sync.(*Cond).Wait).
+    - DETECTED runtime_permanent_block: Runtime reported this goroutine as permanently blocked.
+
+Group 7
+  Count: 1
+  Exact fingerprint: sha256:59912d1dceb3d381b42b9002f86771b9507eefab2b375b916985d734a287f7c0
+  Semantic fingerprint: sha256:d269bab4bdbf6432a4a89ba96c8c8881bfe7d5b4ecae88a0732f586d863c1df9
+  Blocker: waitgroup
+  Evidence: sync.(*WaitGroup).Wait
+  User frame: worker.waitGroup (waitgroup.go:43)
+  Stack:
+    - runtime.gopark (proc.go:460)
+    - runtime.semacquire1 (sema.go:192)
+    - sync.runtime_SemacquireWaitGroup (sema.go:110)
+    - sync.(*WaitGroup).Wait (waitgroup.go:216)
+    - worker.waitGroup (waitgroup.go:43)
+  Labels: none
+  Findings:
+    - DETECTED blocking_primitive: Blocking primitive: waitgroup (sync.(*WaitGroup).Wait).
+    - DETECTED runtime_permanent_block: Runtime reported this goroutine as permanently blocked.
+
+Group 8
+  Count: 1
+  Exact fingerprint: sha256:e833841e49148e5448c22817bafe463b56d1f73a7f5539d3269abfbcc15e4f1e
+  Semantic fingerprint: sha256:969ad274c998415529411a92752f86f2e630c3ee7d81d19f30e6e2293020e0da
+  Blocker: unknown
+  Evidence: -
+  User frame: worker.waitUnknown (unknown.go:115)
+  Stack:
+    - runtime.gopark (proc.go:460)
+    - worker.waitUnknown (unknown.go:115)
+  Labels: none
+  Findings:
+    - DETECTED runtime_permanent_block: Runtime reported this goroutine as permanently blocked.
+    - INSPECT unknown_blocker: No supported blocking primitive was identified; inspect the retained stack.

@@ -38,6 +38,41 @@ func TestWriteTextFullPipelineGolden(t *testing.T) {
 	}
 }
 
+func TestWriteTextAllBlockersGolden(t *testing.T) {
+	analysis, got := renderSerializedProfile(t, "all-blockers.pprof", allBlockersProfile())
+	if want := readGolden(t, "all_blockers.txt"); got != want {
+		t.Fatalf("WriteText(all blockers) mismatch\ngot:\n%s\nwant:\n%s", got, want)
+	}
+
+	wantKinds := []analyze.BlockerKind{
+		analyze.BlockerChanReceive,
+		analyze.BlockerChanSend,
+		analyze.BlockerSelect,
+		analyze.BlockerMutex,
+		analyze.BlockerRWMutex,
+		analyze.BlockerCond,
+		analyze.BlockerWaitGroup,
+		analyze.BlockerUnknown,
+	}
+	if analysis.Total != int64(len(wantKinds)) || len(analysis.Groups) != len(wantKinds) {
+		t.Fatalf("all-blocker analysis totals = total %d, groups %d, want %d of each", analysis.Total, len(analysis.Groups), len(wantKinds))
+	}
+	for index, wantKind := range wantKinds {
+		group := analysis.Groups[index]
+		if group.Blocker.Kind != wantKind {
+			t.Fatalf("group %d blocker = %q, want %q", index, group.Blocker.Kind, wantKind)
+		}
+		for _, finding := range group.Findings {
+			if finding.Kind == analyze.FindingPossibleCause {
+				t.Fatalf("blocker %q produced an unsupported possible cause: %#v", wantKind, finding)
+			}
+			if strings.Contains(finding.Message, "Fix:") || strings.Contains(finding.Message, "close(") {
+				t.Fatalf("blocker %q produced an automatic repair instruction: %#v", wantKind, finding)
+			}
+		}
+	}
+}
+
 func TestWriteTextEmptyGolden(t *testing.T) {
 	_, got := renderSerializedProfile(t, "empty.pprof", &pprofprofile.Profile{
 		SampleType: []*pprofprofile.ValueType{{Type: "goroutineleak", Unit: "count"}},
@@ -319,6 +354,107 @@ func chanReceiveProfile(order []int) *pprofprofile.Profile {
 		Location:   locations,
 		Function:   functions,
 	}
+}
+
+func allBlockersProfile() *pprofprofile.Profile {
+	type frameSpec struct {
+		function string
+		file     string
+		line     int64
+	}
+	type sampleSpec struct {
+		frames []frameSpec
+	}
+
+	runtimeFrame := frameSpec{
+		function: "runtime.gopark",
+		file:     "/usr/local/go/src/runtime/proc.go",
+		line:     460,
+	}
+	specs := []sampleSpec{
+		{frames: []frameSpec{
+			runtimeFrame,
+			{function: "sync.runtime_notifyListWait", file: "/usr/local/go/src/runtime/sema.go", line: 590},
+			{function: "sync.(*Cond).Wait", file: "/usr/local/go/src/sync/cond.go", line: 71},
+			{function: "github.com/acme/worker.waitCond", file: "/src/worker/cond.go", line: 31},
+		}},
+		{frames: []frameSpec{
+			runtimeFrame,
+			{function: "runtime.semacquire1", file: "/usr/local/go/src/runtime/sema.go", line: 192},
+			{function: "sync.runtime_SemacquireWaitGroup", file: "/usr/local/go/src/runtime/sema.go", line: 110},
+			{function: "sync.(*WaitGroup).Wait", file: "/usr/local/go/src/sync/waitgroup.go", line: 216},
+			{function: "github.com/acme/worker.waitGroup", file: "/src/worker/waitgroup.go", line: 43},
+		}},
+		{frames: []frameSpec{
+			runtimeFrame,
+			{function: "runtime.semacquire1", file: "/usr/local/go/src/runtime/sema.go", line: 192},
+			{function: "sync.runtime_SemacquireRWMutex", file: "/usr/local/go/src/runtime/sema.go", line: 105},
+			{function: "sync.(*RWMutex).Lock", file: "/usr/local/go/src/sync/rwmutex.go", line: 151},
+			{function: "github.com/acme/worker.lockShared", file: "/src/worker/rwmutex.go", line: 55},
+		}},
+		{frames: []frameSpec{
+			runtimeFrame,
+			{function: "runtime.semacquire1", file: "/usr/local/go/src/runtime/sema.go", line: 192},
+			{function: "internal/sync.runtime_SemacquireMutex", file: "/usr/local/go/src/runtime/sema.go", line: 95},
+			{function: "internal/sync.(*Mutex).lockSlow", file: "/usr/local/go/src/internal/sync/mutex.go", line: 149},
+			{function: "sync.(*Mutex).Lock", file: "/usr/local/go/src/sync/mutex.go", line: 46},
+			{function: "github.com/acme/worker.lock", file: "/src/worker/mutex.go", line: 67},
+		}},
+		{frames: []frameSpec{
+			runtimeFrame,
+			{function: "runtime.selectgo", file: "/usr/local/go/src/runtime/select.go", line: 122},
+			{function: "github.com/acme/worker.waitSelect", file: "/src/worker/select.go", line: 79},
+		}},
+		{frames: []frameSpec{
+			runtimeFrame,
+			{function: "runtime.chansend", file: "/usr/local/go/src/runtime/chan.go", line: 171},
+			{function: "runtime.chansend1", file: "/usr/local/go/src/runtime/chan.go", line: 156},
+			{function: "github.com/acme/worker.send", file: "/src/worker/send.go", line: 91},
+		}},
+		{frames: []frameSpec{
+			runtimeFrame,
+			{function: "runtime.chanrecv", file: "/usr/local/go/src/runtime/chan.go", line: 664},
+			{function: "runtime.chanrecv1", file: "/usr/local/go/src/runtime/chan.go", line: 506},
+			{function: "github.com/acme/worker.receive", file: "/src/worker/receive.go", line: 103},
+		}},
+		{frames: []frameSpec{
+			runtimeFrame,
+			{function: "github.com/acme/worker.waitUnknown", file: "/src/worker/unknown.go", line: 115},
+		}},
+	}
+
+	result := &pprofprofile.Profile{
+		SampleType: []*pprofprofile.ValueType{{Type: "goroutineleak", Unit: "count"}},
+		Sample:     make([]*pprofprofile.Sample, 0, len(specs)),
+		Location:   make([]*pprofprofile.Location, 0),
+		Function:   make([]*pprofprofile.Function, 0),
+	}
+	var functionID uint64
+	var locationID uint64
+	for _, spec := range specs {
+		locations := make([]*pprofprofile.Location, 0, len(spec.frames))
+		for _, frame := range spec.frames {
+			functionID++
+			function := &pprofprofile.Function{
+				ID:       functionID,
+				Name:     frame.function,
+				Filename: frame.file,
+			}
+			locationID++
+			location := &pprofprofile.Location{
+				ID:   locationID,
+				Line: []pprofprofile.Line{{Function: function, Line: frame.line}},
+			}
+			result.Function = append(result.Function, function)
+			result.Location = append(result.Location, location)
+			locations = append(locations, location)
+		}
+		result.Sample = append(result.Sample, &pprofprofile.Sample{
+			Location: locations,
+			Value:    []int64{1},
+		})
+	}
+	return result
 }
 
 func unknownProfile() *pprofprofile.Profile {
