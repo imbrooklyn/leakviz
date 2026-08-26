@@ -78,6 +78,7 @@ func TestRunAnalyzeArgvContract(t *testing.T) {
 		args      []string
 		wantCode  int
 		wantError string
+		wantJSON  bool
 	}{
 		{
 			name:     "canonical flags before operand",
@@ -102,10 +103,16 @@ func TestRunAnalyzeArgvContract(t *testing.T) {
 			wantError: "expected exactly one source operand",
 		},
 		{
-			name:      "JSON flag is not registered",
-			args:      []string{"--json", profilePath},
-			wantCode:  exitUsage,
-			wantError: "flag provided but not defined: -json",
+			name:     "canonical JSON flag",
+			args:     []string{"--json", profilePath},
+			wantCode: exitSuccess,
+			wantJSON: true,
+		},
+		{
+			name:     "standard single dash JSON spelling",
+			args:     []string{"-json", profilePath},
+			wantCode: exitSuccess,
+			wantJSON: true,
 		},
 		{
 			name:      "unknown flag",
@@ -175,7 +182,11 @@ func TestRunAnalyzeArgvContract(t *testing.T) {
 				t.Fatalf("Run() code = %d, want %d; stdout=%q stderr=%q", code, test.wantCode, stdout, stderr)
 			}
 			if test.wantCode == exitSuccess {
-				if stderr != "" || !strings.HasPrefix(stdout, "LEAKVIZ ANALYSIS\n") {
+				wantPrefix := "LEAKVIZ ANALYSIS\n"
+				if test.wantJSON {
+					wantPrefix = "{\n  \"schema_version\": 1,\n  \"report\": \"analysis\",\n"
+				}
+				if stderr != "" || !strings.HasPrefix(stdout, wantPrefix) {
 					t.Fatalf("success streams: stdout=%q stderr=%q", stdout, stderr)
 				}
 				return
@@ -318,6 +329,34 @@ func TestRunTimeoutAndValidationBeforeOpen(t *testing.T) {
 }
 
 func TestRunOperationalFailuresAndStreamSeparation(t *testing.T) {
+	t.Run("JSON success", func(t *testing.T) {
+		profilePath := writeCLIProfile(t, "json.pprof", cliProfileBytes(t, "goroutineleak"))
+		stdout, stderr, code := invokeCLI(t, []string{"--json", profilePath}, nil, nil)
+		if code != exitSuccess || stderr != "" {
+			t.Fatalf("JSON success = code %d, stdout %q, stderr %q", code, stdout, stderr)
+		}
+		for _, want := range []string{
+			"  \"schema_version\": 1,\n",
+			"  \"report\": \"analysis\",\n",
+			"  \"fingerprint_version\": 1,\n",
+			"  \"source\": \"" + profilePath + "\",\n",
+			"      \"kind\": \"chan_receive\",\n",
+		} {
+			if !strings.Contains(stdout, want) {
+				t.Fatalf("JSON stdout missing %q:\n%s", want, stdout)
+			}
+		}
+		if !strings.HasSuffix(stdout, "\n") {
+			t.Fatalf("JSON stdout must end with LF: %q", stdout)
+		}
+	})
+
+	t.Run("JSON profile error", func(t *testing.T) {
+		path := writeCLIProfile(t, "wrong-json.pprof", cliProfileBytes(t, "goroutine"))
+		stdout, stderr, code := invokeCLI(t, []string{"--json", path}, nil, nil)
+		assertOperationalFailure(t, code, stdout, stderr, "parse profile")
+	})
+
 	t.Run("missing file", func(t *testing.T) {
 		stdout, stderr, code := invokeCLI(t, []string{filepath.Join(t.TempDir(), "missing.pprof")}, nil, nil)
 		assertOperationalFailure(t, code, stdout, stderr, "open file source")
@@ -363,6 +402,21 @@ func TestRunOperationalFailuresAndStreamSeparation(t *testing.T) {
 		)
 		if code != exitOperational || !strings.Contains(stderr.String(), "write text report: writer failed") || strings.Count(stderr.String(), "\n") != 1 {
 			t.Fatalf("writer failure = code %d, stderr %q", code, stderr.String())
+		}
+	})
+
+	t.Run("JSON report writer", func(t *testing.T) {
+		profilePath := writeCLIProfile(t, "json-writer.pprof", cliProfileBytes(t, "goroutineleak"))
+		var stderr bytes.Buffer
+		code := Run(
+			context.Background(),
+			[]string{"--json", profilePath},
+			nil,
+			failingWriter{err: errors.New("writer failed")},
+			&stderr,
+		)
+		if code != exitOperational || !strings.Contains(stderr.String(), "write JSON report: writer failed") || strings.Count(stderr.String(), "\n") != 1 {
+			t.Fatalf("JSON writer failure = code %d, stderr %q", code, stderr.String())
 		}
 	})
 }

@@ -35,6 +35,7 @@ Sources:
   HOST:PORT         Read the goroutineleak endpoint over HTTP.
 
 Flags:
+  --json            Write JSON schema v1 instead of text.
   --app prefix      Prefer a user frame in a package or module.
   --timeout value   HTTP request timeout (default 30s).
   --version         Print the version and exit.
@@ -62,10 +63,12 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 
 	var appPrefix string
 	timeout := defaultTimeout
+	var jsonOutput bool
 	var showVersion bool
 	var shortHelp bool
 	var longHelp bool
 
+	flags.BoolVar(&jsonOutput, "json", false, "write JSON schema v1")
 	flags.StringVar(&appPrefix, "app", "", "prefer a user frame in a package or module")
 	flags.DurationVar(&timeout, "timeout", defaultTimeout, "HTTP request timeout")
 	flags.BoolVar(&showVersion, "version", false, "print the version and exit")
@@ -127,7 +130,11 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	if err != nil {
 		return operationalFailure(stderr, "analyze profile: %v", err)
 	}
-	if err := report.WriteText(stdout, analysis); err != nil {
+	writeReport := report.WriteText
+	if jsonOutput {
+		writeReport = report.WriteJSON
+	}
+	if err := writeReport(stdout, analysis); err != nil {
 		return operationalFailure(stderr, "%v", err)
 	}
 

@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "report": "analysis",
+  "fingerprint_version": 1,
+  "source": "localhost:6060",
+  "total": 22,
+  "groups": [
+    {
+      "exact_fingerprint": "sha256:f9539207a187cde6a8b712278dce01252a531e54a17866d3e80f9ba9f94685bc",
+      "semantic_fingerprint": "sha256:8b77b951c4b986fa99dda710146d0e116cff968e21945bd11cfc8c289ba87d0c",
+      "count": 22,
+      "blocker": {
+        "kind": "chan_receive",
+        "evidence_function": "runtime.chanrecv1"
+      },
+      "user_frame": {
+        "function": "github.com/acme/worker.(*Pool).run",
+        "file": "/src/worker.go",
+        "line": 87,
+        "inlined": false
+      },
+      "stack": [
+        {
+          "function": "runtime.gopark",
+          "file": "/usr/local/go/src/runtime/proc.go",
+          "line": 460,
+          "inlined": false
+        },
+        {
+          "function": "runtime.chanrecv",
+          "file": "/usr/local/go/src/runtime/chan.go",
+          "line": 664,
+          "inlined": false
+        },
+        {
+          "function": "runtime.chanrecv1",
+          "file": "/usr/local/go/src/runtime/chan.go",
+          "line": 506,
+          "inlined": false
+        },
+        {
+          "function": "github.com/acme/worker.(*Pool).run",
+          "file": "/src/worker.go",
+          "line": 87,
+          "inlined": false
+        }
+      ],
+      "labels": [
+        {
+          "key": "tenant",
+          "present": 22,
+          "missing": 0,
+          "values": [
+            {
+              "value": "b",
+              "count": 12
+            },
+            {
+              "value": "a",
+              "count": 10
+            }
+          ]
+        }
+      ],
+      "findings": [
+        {
+          "kind": "detected",
+          "code": "blocking_primitive",
+          "message": "Blocking primitive: chan_receive (runtime.chanrecv1)."
+        },
+        {
+          "kind": "detected",
+          "code": "runtime_permanent_block",
+          "message": "Runtime reported this goroutine as permanently blocked."
+        }
+      ]
+    }
+  ]
+}

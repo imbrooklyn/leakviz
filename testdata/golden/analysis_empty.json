@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "report": "analysis",
+  "fingerprint_version": 1,
+  "source": "empty.pprof",
+  "total": 0,
+  "groups": []
+}

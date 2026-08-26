@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "report": "analysis",
+  "fingerprint_version": 1,
+  "source": "unknown.pprof",
+  "total": 1,
+  "groups": [
+    {
+      "exact_fingerprint": "sha256:79ed6dd31c91f04d773b7ef50599dd4fb812dfa6f25ded465e8bc727ee5b9166",
+      "semantic_fingerprint": "sha256:da10a11e6c15ec66df0b41598059450a0c070c5ef29be0dd3e84eedf4860a8ba",
+      "count": 1,
+      "blocker": {
+        "kind": "unknown",
+        "evidence_function": ""
+      },
+      "user_frame": null,
+      "stack": [
+        {
+          "function": "runtime.mystery",
+          "file": "/usr/local/go/src/runtime/mystery.go",
+          "line": 1,
+          "inlined": false
+        }
+      ],
+      "labels": [],
+      "findings": [
+        {
+          "kind": "detected",
+          "code": "runtime_permanent_block",
+          "message": "Runtime reported this goroutine as permanently blocked."
+        },
+        {
+          "kind": "inspect",
+          "code": "unknown_blocker",
+          "message": "No supported blocking primitive was identified; inspect the retained stack."
+        }
+      ]
+    }
+  ]
+}
