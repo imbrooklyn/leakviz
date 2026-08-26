@@ -295,6 +295,14 @@ func FuzzFingerprint(f *testing.F) {
 		if semanticFirst != movedSemantic {
 			t.Fatalf("file/line mutation changed semantic identity: %q != %q", semanticFirst, movedSemantic)
 		}
+
+		leftExactBoundary := []profile.Frame{{Function: function + "a", File: file}}
+		rightExactBoundary := []profile.Frame{{Function: function, File: "a" + file}}
+		assertDistinctExactBoundaries(t, leftExactBoundary, rightExactBoundary)
+
+		leftSemanticBoundary := []string{function + "a", caller}
+		rightSemanticBoundary := []string{function, "a" + caller}
+		assertDistinctSemanticBoundaries(t, leftSemanticBoundary, rightSemanticBoundary)
 	})
 }
 
@@ -306,6 +314,12 @@ func FuzzNormalizeStack(f *testing.F) {
 		inline bool
 	}{
 		{first: "runtime.gopark", second: "runtime.chanrecv", third: "github.com/acme/worker.Run"},
+		{first: "runtime.block", second: "runtime.selectgo", third: "runtime.chanrecv1"},
+		{first: "runtime.chansend", second: "runtime.chansend1", third: "runtime.semacquire1"},
+		{first: "sync.runtime_Semacquire", second: "sync.runtime_SemacquireWaitGroup", third: "sync.runtime_SemacquireRWMutex"},
+		{first: "sync.runtime_SemacquireRWMutexR", second: "sync.runtime_notifyListWait", third: "internal/sync.runtime_SemacquireMutex"},
+		{first: "internal/sync.(*Mutex).lockSlow", second: "sync.(*Mutex).Lock", third: "sync.(*RWMutex).Lock"},
+		{first: "sync.(*RWMutex).RLock", second: "sync.(*Cond).Wait", third: "sync.(*WaitGroup).Wait"},
 		{first: "sync.(*Mutex).Lock", second: "github.com/acme/pipeline.Map[int]", third: "github.com/acme/pipeline.Map[int].func1", inline: true},
 		{first: "runtime.chanrecv2", second: "例/包.函数", third: "", inline: true},
 		{first: "pkg.é", second: "pkg.e\u0301", third: "pkg.func1"},
@@ -348,6 +362,58 @@ func FuzzNormalizeStack(f *testing.F) {
 			t.Fatalf("normalized fingerprints are nondeterministic: %q != %q", firstFingerprint, secondFingerprint)
 		}
 	})
+}
+
+func assertDistinctExactBoundaries(t *testing.T, left, right []profile.Frame) {
+	t.Helper()
+	leftPreimage, err := exactPreimage(left)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rightPreimage, err := exactPreimage(right)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(leftPreimage, rightPreimage) {
+		t.Fatalf("distinct exact field boundaries produced the same preimage: %x", leftPreimage)
+	}
+	leftFingerprint, err := exactFingerprint(left)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rightFingerprint, err := exactFingerprint(right)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if leftFingerprint == rightFingerprint {
+		t.Fatalf("distinct exact field boundaries produced the same fingerprint %q", leftFingerprint)
+	}
+}
+
+func assertDistinctSemanticBoundaries(t *testing.T, left, right []string) {
+	t.Helper()
+	leftPreimage, err := semanticPreimage(BlockerUnknown, left)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rightPreimage, err := semanticPreimage(BlockerUnknown, right)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Equal(leftPreimage, rightPreimage) {
+		t.Fatalf("distinct semantic frame boundaries produced the same preimage: %x", leftPreimage)
+	}
+	leftFingerprint, err := semanticFingerprint(BlockerUnknown, left)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rightFingerprint, err := semanticFingerprint(BlockerUnknown, right)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if leftFingerprint == rightFingerprint {
+		t.Fatalf("distinct semantic frame boundaries produced the same fingerprint %q", leftFingerprint)
+	}
 }
 
 func fingerprintsForTest(t *testing.T, stack []profile.Frame, blocker BlockerKind) (string, string) {
