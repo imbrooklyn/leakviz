@@ -1,0 +1,224 @@
+{
+  "schema_version": 1,
+  "report": "diff",
+  "fingerprint_version": 1,
+  "before": {
+    "source": "before.pprof",
+    "total": 10
+  },
+  "after": {
+    "source": "after.pprof",
+    "total": 12
+  },
+  "changes": [
+    {
+      "status": "INCREASED",
+      "semantic_fingerprint": "sha256:8b77b951c4b986fa99dda710146d0e116cff968e21945bd11cfc8c289ba87d0c",
+      "before_count": 10,
+      "after_count": 12,
+      "delta": 2,
+      "before_groups": [
+        {
+          "exact_fingerprint": "sha256:f9539207a187cde6a8b712278dce01252a531e54a17866d3e80f9ba9f94685bc",
+          "semantic_fingerprint": "sha256:8b77b951c4b986fa99dda710146d0e116cff968e21945bd11cfc8c289ba87d0c",
+          "count": 6,
+          "blocker": {
+            "kind": "chan_receive",
+            "evidence_function": "runtime.chanrecv1"
+          },
+          "user_frame": {
+            "function": "github.com/acme/worker.(*Pool).run",
+            "file": "/src/worker.go",
+            "line": 87,
+            "inlined": false
+          },
+          "stack": [
+            {
+              "function": "runtime.gopark",
+              "file": "/usr/local/go/src/runtime/proc.go",
+              "line": 460,
+              "inlined": false
+            },
+            {
+              "function": "runtime.chanrecv",
+              "file": "/usr/local/go/src/runtime/chan.go",
+              "line": 664,
+              "inlined": false
+            },
+            {
+              "function": "runtime.chanrecv1",
+              "file": "/usr/local/go/src/runtime/chan.go",
+              "line": 506,
+              "inlined": false
+            },
+            {
+              "function": "github.com/acme/worker.(*Pool).run",
+              "file": "/src/worker.go",
+              "line": 87,
+              "inlined": false
+            }
+          ],
+          "labels": [
+            {
+              "key": "tenant",
+              "present": 6,
+              "missing": 0,
+              "values": [
+                {
+                  "value": "a",
+                  "count": 6
+                }
+              ]
+            }
+          ],
+          "findings": [
+            {
+              "kind": "detected",
+              "code": "blocking_primitive",
+              "message": "Blocking primitive: chan_receive (runtime.chanrecv1)."
+            },
+            {
+              "kind": "detected",
+              "code": "runtime_permanent_block",
+              "message": "Runtime reported this goroutine as permanently blocked."
+            }
+          ]
+        },
+        {
+          "exact_fingerprint": "sha256:b77d3c10d7bfa0320e061a9691d414806298d844d46d88581283c65d33f9003b",
+          "semantic_fingerprint": "sha256:8b77b951c4b986fa99dda710146d0e116cff968e21945bd11cfc8c289ba87d0c",
+          "count": 4,
+          "blocker": {
+            "kind": "chan_receive",
+            "evidence_function": "runtime.chanrecv1"
+          },
+          "user_frame": {
+            "function": "github.com/acme/worker.(*Pool).run",
+            "file": "/src/worker.go",
+            "line": 80,
+            "inlined": false
+          },
+          "stack": [
+            {
+              "function": "runtime.gopark",
+              "file": "/usr/local/go/src/runtime/proc.go",
+              "line": 460,
+              "inlined": false
+            },
+            {
+              "function": "runtime.chanrecv",
+              "file": "/usr/local/go/src/runtime/chan.go",
+              "line": 664,
+              "inlined": false
+            },
+            {
+              "function": "runtime.chanrecv1",
+              "file": "/usr/local/go/src/runtime/chan.go",
+              "line": 506,
+              "inlined": false
+            },
+            {
+              "function": "github.com/acme/worker.(*Pool).run",
+              "file": "/src/worker.go",
+              "line": 80,
+              "inlined": false
+            }
+          ],
+          "labels": [
+            {
+              "key": "tenant",
+              "present": 4,
+              "missing": 0,
+              "values": [
+                {
+                  "value": "a",
+                  "count": 4
+                }
+              ]
+            }
+          ],
+          "findings": [
+            {
+              "kind": "detected",
+              "code": "blocking_primitive",
+              "message": "Blocking primitive: chan_receive (runtime.chanrecv1)."
+            },
+            {
+              "kind": "detected",
+              "code": "runtime_permanent_block",
+              "message": "Runtime reported this goroutine as permanently blocked."
+            }
+          ]
+        }
+      ],
+      "after_groups": [
+        {
+          "exact_fingerprint": "sha256:6a9fa2b2f763527c0dbfbbb3e94e7fdbd1578fe891dca4ed58d9b362ef86e994",
+          "semantic_fingerprint": "sha256:8b77b951c4b986fa99dda710146d0e116cff968e21945bd11cfc8c289ba87d0c",
+          "count": 12,
+          "blocker": {
+            "kind": "chan_receive",
+            "evidence_function": "runtime.chanrecv1"
+          },
+          "user_frame": {
+            "function": "github.com/acme/worker.(*Pool).run",
+            "file": "/src/worker.go",
+            "line": 92,
+            "inlined": false
+          },
+          "stack": [
+            {
+              "function": "runtime.gopark",
+              "file": "/usr/local/go/src/runtime/proc.go",
+              "line": 460,
+              "inlined": false
+            },
+            {
+              "function": "runtime.chanrecv",
+              "file": "/usr/local/go/src/runtime/chan.go",
+              "line": 664,
+              "inlined": false
+            },
+            {
+              "function": "runtime.chanrecv1",
+              "file": "/usr/local/go/src/runtime/chan.go",
+              "line": 506,
+              "inlined": false
+            },
+            {
+              "function": "github.com/acme/worker.(*Pool).run",
+              "file": "/src/worker.go",
+              "line": 92,
+              "inlined": false
+            }
+          ],
+          "labels": [
+            {
+              "key": "tenant",
+              "present": 12,
+              "missing": 0,
+              "values": [
+                {
+                  "value": "a",
+                  "count": 12
+                }
+              ]
+            }
+          ],
+          "findings": [
+            {
+              "kind": "detected",
+              "code": "blocking_primitive",
+              "message": "Blocking primitive: chan_receive (runtime.chanrecv1)."
+            },
+            {
+              "kind": "detected",
+              "code": "runtime_permanent_block",
+              "message": "Runtime reported this goroutine as permanently blocked."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

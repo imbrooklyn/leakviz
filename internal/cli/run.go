@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/imbrooklyn/leakviz/internal/analyze"
+	"github.com/imbrooklyn/leakviz/internal/diff"
 	"github.com/imbrooklyn/leakviz/internal/profile"
 	"github.com/imbrooklyn/leakviz/internal/report"
 	"github.com/imbrooklyn/leakviz/internal/source"
@@ -44,6 +45,24 @@ Flags:
 The operand "diff" is reserved; use "./diff" to analyze a file with that name.
 `
 
+const diffUsage = `Usage:
+  leakviz diff [flags] <before> <after>
+
+Sources:
+  -                 Read one profile from standard input.
+  PATH              Read a profile file.
+  URL               Read an HTTP or HTTPS endpoint.
+  HOST:PORT         Read the goroutineleak endpoint over HTTP.
+
+Flags:
+  --json            Write JSON schema v1 instead of text.
+  --app prefix      Prefer a user frame in a package or module.
+  --timeout value   Timeout for each HTTP request (default 30s).
+  -h, --help        Print this help.
+
+At most one source may use standard input.
+`
+
 // version may be injected with -ldflags -X. Development builds fall back to
 // build information and then to the stable "devel" marker.
 var version string
@@ -51,12 +70,12 @@ var version string
 // Run executes one leakviz invocation and returns its process exit code.
 func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "diff" {
-		return usageFailure(
-			stderr,
-			`operand "diff" is reserved; use "./diff" to analyze a file with that name`,
-		)
+		return runDiff(ctx, args[1:], stdin, stdout, stderr)
 	}
+	return runAnalyze(ctx, args, stdin, stdout, stderr)
+}
 
+func runAnalyze(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 	flags := flag.NewFlagSet("leakviz", flag.ContinueOnError)
 	flags.SetOutput(io.Discard)
 	flags.Usage = func() {}
@@ -109,26 +128,9 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 		return operationalFailure(stderr, "run analysis: nil context")
 	}
 
-	requestContext, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-
-	loader := source.Loader{
-		Stdin:  stdin,
-		Client: &http.Client{Timeout: timeout},
-	}
-	input, err := loader.Open(requestContext, flags.Arg(0))
+	analysis, err := analyzeTarget(ctx, flags.Arg(0), appPrefix, timeout, stdin)
 	if err != nil {
 		return operationalFailure(stderr, "%v", err)
-	}
-	defer input.Reader.Close()
-
-	snapshot, err := profile.Parse(input.DisplayName, input.Reader)
-	if err != nil {
-		return operationalFailure(stderr, "parse profile: %v", err)
-	}
-	analysis, err := analyze.Analyze(snapshot, analyze.Options{AppPrefix: appPrefix})
-	if err != nil {
-		return operationalFailure(stderr, "analyze profile: %v", err)
 	}
 	writeReport := report.WriteText
 	if jsonOutput {
@@ -139,6 +141,97 @@ func Run(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.
 	}
 
 	return exitSuccess
+}
+
+func runDiff(ctx context.Context, args []string, stdin io.Reader, stdout, stderr io.Writer) int {
+	flags := flag.NewFlagSet("leakviz diff", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	flags.Usage = func() {}
+
+	var jsonOutput bool
+	var appPrefix string
+	timeout := defaultTimeout
+	var shortHelp bool
+	var longHelp bool
+
+	flags.BoolVar(&jsonOutput, "json", false, "write JSON schema v1")
+	flags.StringVar(&appPrefix, "app", "", "prefer a user frame in a package or module")
+	flags.DurationVar(&timeout, "timeout", defaultTimeout, "timeout for each HTTP request")
+	flags.BoolVar(&shortHelp, "h", false, "print help")
+	flags.BoolVar(&longHelp, "help", false, "print help")
+
+	if err := flags.Parse(args); err != nil {
+		return diffUsageFailure(stderr, "%v", err)
+	}
+	if shortHelp || longHelp {
+		if len(args) != 1 || flags.NArg() != 0 {
+			return diffUsageFailure(stderr, "help cannot be combined with other arguments")
+		}
+		if err := writeString(stdout, diffUsage); err != nil {
+			return operationalFailure(stderr, "write help: %v", err)
+		}
+		return exitSuccess
+	}
+	if timeout <= 0 {
+		return diffUsageFailure(stderr, "timeout must be greater than zero")
+	}
+	if flags.NArg() != 2 {
+		return diffUsageFailure(stderr, "expected exactly two source operands")
+	}
+	beforeTarget, afterTarget := flags.Arg(0), flags.Arg(1)
+	if beforeTarget == "-" && afterTarget == "-" {
+		return diffUsageFailure(stderr, "before and after cannot both use standard input")
+	}
+	if ctx == nil {
+		return operationalFailure(stderr, "run diff: nil context")
+	}
+
+	before, err := analyzeTarget(ctx, beforeTarget, appPrefix, timeout, stdin)
+	if err != nil {
+		return operationalFailure(stderr, "analyze before source: %v", err)
+	}
+	after, err := analyzeTarget(ctx, afterTarget, appPrefix, timeout, stdin)
+	if err != nil {
+		return operationalFailure(stderr, "analyze after source: %v", err)
+	}
+	result, err := diff.Compare(before, after)
+	if err != nil {
+		return operationalFailure(stderr, "compare analyses: %v", err)
+	}
+
+	writeReport := report.WriteDiffText
+	if jsonOutput {
+		writeReport = report.WriteDiffJSON
+	}
+	if err := writeReport(stdout, result); err != nil {
+		return operationalFailure(stderr, "%v", err)
+	}
+	return exitSuccess
+}
+
+func analyzeTarget(ctx context.Context, target, appPrefix string, timeout time.Duration, stdin io.Reader) (analyze.Analysis, error) {
+	requestContext, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	loader := source.Loader{
+		Stdin:  stdin,
+		Client: &http.Client{Timeout: timeout},
+	}
+	input, err := loader.Open(requestContext, target)
+	if err != nil {
+		return analyze.Analysis{}, err
+	}
+	defer input.Reader.Close()
+
+	snapshot, err := profile.Parse(input.DisplayName, input.Reader)
+	if err != nil {
+		return analyze.Analysis{}, fmt.Errorf("parse profile: %w", err)
+	}
+	analysis, err := analyze.Analyze(snapshot, analyze.Options{AppPrefix: appPrefix})
+	if err != nil {
+		return analyze.Analysis{}, fmt.Errorf("analyze profile: %w", err)
+	}
+	return analysis, nil
 }
 
 func currentVersion() string {
@@ -170,7 +263,15 @@ func buildInfoVersion(info *debug.BuildInfo) string {
 }
 
 func usageFailure(stderr io.Writer, format string, args ...any) int {
-	_ = writeString(stderr, analyzeUsage)
+	return usageFailureWith(stderr, analyzeUsage, format, args...)
+}
+
+func diffUsageFailure(stderr io.Writer, format string, args ...any) int {
+	return usageFailureWith(stderr, diffUsage, format, args...)
+}
+
+func usageFailureWith(stderr io.Writer, usage, format string, args ...any) int {
+	_ = writeString(stderr, usage)
 	message := strings.NewReplacer("\r", " ", "\n", " ").Replace(fmt.Sprintf(format, args...))
 	_ = writeString(stderr, "Error: "+message+"\n")
 	return exitUsage

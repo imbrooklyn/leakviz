@@ -1,0 +1,59 @@
+LEAKVIZ DIFF
+Before: before.pprof (total=16)
+After: after.pprof (total=15)
+Changes: 5
+
+Change 1
+  Status: NEW
+  Semantic fingerprint: semantic-new
+  Before count: 0
+  After count: 4
+  Delta: +4
+  Representative: -
+  Representative exact fingerprint: -
+  Before sites: 0
+  After sites: 0
+
+Change 2
+  Status: INCREASED
+  Semantic fingerprint: semantic-increased
+  Before count: 2
+  After count: 5
+  Delta: +3
+  Representative: -
+  Representative exact fingerprint: -
+  Before sites: 0
+  After sites: 0
+
+Change 3
+  Status: DECREASED
+  Semantic fingerprint: semantic-decreased
+  Before count: 5
+  After count: 2
+  Delta: -3
+  Representative: -
+  Representative exact fingerprint: -
+  Before sites: 0
+  After sites: 0
+
+Change 4
+  Status: RESOLVED
+  Semantic fingerprint: semantic-resolved
+  Before count: 4
+  After count: 0
+  Delta: -4
+  Representative: -
+  Representative exact fingerprint: -
+  Before sites: 0
+  After sites: 0
+
+Change 5
+  Status: UNCHANGED
+  Semantic fingerprint: semantic-unchanged
+  Before count: 5
+  After count: 5
+  Delta: 0
+  Representative: -
+  Representative exact fingerprint: -
+  Before sites: 0
+  After sites: 0

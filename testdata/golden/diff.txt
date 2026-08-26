@@ -1,0 +1,15 @@
+LEAKVIZ DIFF
+Before: before.pprof (total=10)
+After: after.pprof (total=12)
+Changes: 1
+
+Change 1
+  Status: INCREASED
+  Semantic fingerprint: sha256:8b77b951c4b986fa99dda710146d0e116cff968e21945bd11cfc8c289ba87d0c
+  Before count: 10
+  After count: 12
+  Delta: +2
+  Representative: worker.(*Pool).run (worker.go:92)
+  Representative exact fingerprint: sha256:6a9fa2b2f763527c0dbfbbb3e94e7fdbd1578fe891dca4ed58d9b362ef86e994
+  Before sites: 2
+  After sites: 1

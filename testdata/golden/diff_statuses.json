@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "report": "diff",
+  "fingerprint_version": 1,
+  "before": {
+    "source": "C:\\profiles\\before.pprof",
+    "total": 16
+  },
+  "after": {
+    "source": "/tmp/after.pprof",
+    "total": 15
+  },
+  "changes": [
+    {
+      "status": "NEW",
+      "semantic_fingerprint": "semantic-new",
+      "before_count": 0,
+      "after_count": 4,
+      "delta": 4,
+      "before_groups": [],
+      "after_groups": []
+    },
+    {
+      "status": "INCREASED",
+      "semantic_fingerprint": "semantic-increased",
+      "before_count": 2,
+      "after_count": 5,
+      "delta": 3,
+      "before_groups": [],
+      "after_groups": []
+    },
+    {
+      "status": "DECREASED",
+      "semantic_fingerprint": "semantic-decreased",
+      "before_count": 5,
+      "after_count": 2,
+      "delta": -3,
+      "before_groups": [],
+      "after_groups": []
+    },
+    {
+      "status": "RESOLVED",
+      "semantic_fingerprint": "semantic-resolved",
+      "before_count": 4,
+      "after_count": 0,
+      "delta": -4,
+      "before_groups": [],
+      "after_groups": []
+    },
+    {
+      "status": "UNCHANGED",
+      "semantic_fingerprint": "semantic-unchanged",
+      "before_count": 5,
+      "after_count": 5,
+      "delta": 0,
+      "before_groups": [],
+      "after_groups": []
+    }
+  ]
+}

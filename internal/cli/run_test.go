@@ -263,7 +263,7 @@ func TestBuildInfoVersion(t *testing.T) {
 	}
 }
 
-func TestRunDoubleDashAndReservedDiffFile(t *testing.T) {
+func TestRunDoubleDashAndDiffDispatch(t *testing.T) {
 	data := cliProfileBytes(t, "goroutineleak")
 	tempDir := t.TempDir()
 	t.Chdir(tempDir)
@@ -278,8 +278,8 @@ func TestRunDoubleDashAndReservedDiffFile(t *testing.T) {
 	assertSuccessfulReport(t, code, stdout, stderr, "-snapshot.pprof")
 
 	stdout, stderr, code = invokeCLI(t, []string{"diff"}, nil, nil)
-	if code != exitUsage || stdout != "" || !strings.Contains(stderr, `operand "diff" is reserved`) || !strings.Contains(stderr, `"./diff"`) {
-		t.Fatalf("reserved diff = code %d, stdout %q, stderr %q", code, stdout, stderr)
+	if code != exitUsage || stdout != "" || !strings.HasPrefix(stderr, diffUsage) || !strings.Contains(stderr, "expected exactly two source operands") {
+		t.Fatalf("diff dispatch = code %d, stdout %q, stderr %q", code, stdout, stderr)
 	}
 
 	stdout, stderr, code = invokeCLI(t, []string{"./diff"}, nil, nil)

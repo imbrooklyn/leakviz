@@ -11,8 +11,8 @@ import (
 )
 
 const (
-	analysisSchemaVersion      = 1
-	analysisFingerprintVersion = 1
+	schemaVersion      = 1
+	fingerprintVersion = 1
 )
 
 type analysisJSON struct {
@@ -94,9 +94,9 @@ func newAnalysisJSON(analysis analyze.Analysis) analysisJSON {
 		groups[index] = newGroupJSON(group)
 	}
 	return analysisJSON{
-		SchemaVersion:      analysisSchemaVersion,
+		SchemaVersion:      schemaVersion,
 		Report:             "analysis",
-		FingerprintVersion: analysisFingerprintVersion,
+		FingerprintVersion: fingerprintVersion,
 		Source:             analysis.Source,
 		Total:              analysis.Total,
 		Groups:             groups,
