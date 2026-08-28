@@ -102,6 +102,43 @@ func TestWriteDiffRepresentativeSelectionAndPaths(t *testing.T) {
 	}
 }
 
+func TestWriteDiffTextEscapesDynamicScalars(t *testing.T) {
+	userFrame := profile.Frame{
+		Function: "example.test/diff\n\x1b[31m\\frame",
+		File:     "/src/diff\r\t.go",
+		Line:     22,
+	}
+	result := analysisdiff.Result{
+		BeforeSource: "https://example.test/before\n\x1b[2J",
+		AfterSource:  "/tmp/after\r\x1b.pprof",
+		Changes: []analysisdiff.Change{{
+			Status:              analysisdiff.Status("NEW\n\x1b"),
+			SemanticFingerprint: "semantic\r\\value",
+			AfterCount:          1,
+			Delta:               1,
+			AfterGroups: []analyze.Group{{
+				ExactFingerprint: "exact\u2028value",
+				UserFrame:        &userFrame,
+			}},
+		}},
+	}
+
+	got := renderDiffText(t, result)
+	for _, want := range []string{
+		`Before: https://example.test/before\n\x1b[2J (total=0)`,
+		`After: after\r\x1b.pprof (total=0)`,
+		`  Status: NEW\n\x1b`,
+		`  Semantic fingerprint: semantic\r\\value`,
+		`  Representative: diff\n\x1b[31m\\frame (diff\r\t.go:22)`,
+		`  Representative exact fingerprint: exact\u2028value`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("WriteDiffText() missing escaped fragment %q:\n%s", want, got)
+		}
+	}
+	assertTextContainsNoUnsafeControl(t, got)
+}
+
 func TestWriteDiffJSONUnicodeHTMLEscapingAndNilUserFrame(t *testing.T) {
 	result := analysisdiff.Result{
 		BeforeSource: "前<追踪>&.pprof",

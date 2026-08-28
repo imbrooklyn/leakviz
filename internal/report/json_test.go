@@ -2,6 +2,7 @@ package report
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"reflect"
@@ -132,6 +133,53 @@ func TestWriteJSONUnicodeAndDefaultHTMLEscaping(t *testing.T) {
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("WriteJSON() missing escaped Unicode/HTML fragment %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestWriteJSONControlCharactersRoundTrip(t *testing.T) {
+	userFrame := profile.Frame{
+		Function: "example.test/user\n\x1b[31m",
+		File:     "/src/user\r\t.go",
+		Line:     7,
+	}
+	analysis := analyze.Analysis{
+		Source: "source\n\x1b[2J.pprof",
+		Total:  1,
+		Groups: []analyze.Group{{
+			ExactFingerprint:    "exact\nvalue",
+			SemanticFingerprint: "semantic\rvalue",
+			Count:               1,
+			Blocker: analyze.Blocker{
+				Kind:             analyze.BlockerUnknown,
+				EvidenceFunction: "evidence\tvalue",
+			},
+			UserFrame: &userFrame,
+			Stack:     []profile.Frame{userFrame},
+			Labels: []analyze.LabelKeySummary{{
+				Key:     "key\x00value",
+				Present: 1,
+				Values:  []analyze.LabelValueCount{{Value: "label\a value", Count: 1}},
+			}},
+			Findings: []analyze.Finding{{
+				Kind:    analyze.FindingInspect,
+				Code:    "code\nvalue",
+				Message: "message\x1b[2J",
+			}},
+		}},
+	}
+
+	rendered := renderJSON(t, analysis)
+	var decoded analysisJSON
+	if err := json.Unmarshal([]byte(rendered), &decoded); err != nil {
+		t.Fatalf("Unmarshal(WriteJSON()) error = %v", err)
+	}
+	if want := newAnalysisJSON(analysis); !reflect.DeepEqual(decoded, want) {
+		t.Fatalf("JSON control-character round trip = %#v, want %#v", decoded, want)
+	}
+	for _, want := range []string{`\n`, `\r`, `\t`, `\u0000`, `\u0007`, `\u001b`} {
+		if !strings.Contains(rendered, want) {
+			t.Fatalf("WriteJSON() missing standard escape %q:\n%s", want, rendered)
 		}
 	}
 }

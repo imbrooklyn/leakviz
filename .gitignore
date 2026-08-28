@@ -1,5 +1,6 @@
-# Local-only planning and working documentation.
+# Local-only documentation.
 /docs/_local/
+/docs/_mirror/
 
 # Local Go build outputs.
 /bin/

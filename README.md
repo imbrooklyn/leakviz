@@ -78,6 +78,9 @@ leakviz --timeout 2m localhost:6060
 Text and JSON reports include stack evidence, exact and semantic fingerprints,
 counts, blocker classification, user-frame selection, labels, and findings.
 Unknown blockers remain reportable and are not assigned a guessed cause.
+Text reports render control characters and invalid UTF-8 bytes in dynamic
+profile fields as visible escape sequences so each value stays on one physical
+line. JSON reports use standard JSON string escaping.
 
 ## Compare snapshots
 

@@ -17,8 +17,8 @@ func WriteDiffText(w io.Writer, result diff.Result) error {
 
 	var output strings.Builder
 	output.WriteString("LEAKVIZ DIFF\n")
-	fmt.Fprintf(&output, "Before: %s (total=%d)\n", displaySource(result.BeforeSource), result.BeforeTotal)
-	fmt.Fprintf(&output, "After: %s (total=%d)\n", displaySource(result.AfterSource), result.AfterTotal)
+	fmt.Fprintf(&output, "Before: %s (total=%d)\n", escapeTextScalar(displaySource(result.BeforeSource)), result.BeforeTotal)
+	fmt.Fprintf(&output, "After: %s (total=%d)\n", escapeTextScalar(displaySource(result.AfterSource)), result.AfterTotal)
 	fmt.Fprintf(&output, "Changes: %d\n", len(result.Changes))
 
 	for index, change := range result.Changes {
@@ -39,8 +39,8 @@ func WriteDiffText(w io.Writer, result diff.Result) error {
 
 func writeTextChange(output *strings.Builder, number int, change diff.Change) {
 	fmt.Fprintf(output, "Change %d\n", number)
-	fmt.Fprintf(output, "  Status: %s\n", change.Status)
-	fmt.Fprintf(output, "  Semantic fingerprint: %s\n", change.SemanticFingerprint)
+	fmt.Fprintf(output, "  Status: %s\n", escapeTextScalar(string(change.Status)))
+	fmt.Fprintf(output, "  Semantic fingerprint: %s\n", escapeTextScalar(change.SemanticFingerprint))
 	fmt.Fprintf(output, "  Before count: %d\n", change.BeforeCount)
 	fmt.Fprintf(output, "  After count: %d\n", change.AfterCount)
 	fmt.Fprintf(output, "  Delta: %s\n", textDelta(change.Delta))
@@ -53,8 +53,8 @@ func writeTextChange(output *strings.Builder, number int, change diff.Change) {
 		fmt.Fprintf(
 			output,
 			"%s (%s:%d)\n",
-			shortFunction(representative.UserFrame.Function),
-			displayBase(representative.UserFrame.File),
+			escapeTextScalar(shortFunction(representative.UserFrame.Function)),
+			escapeTextScalar(displayBase(representative.UserFrame.File)),
 			representative.UserFrame.Line,
 		)
 	}
@@ -63,7 +63,7 @@ func writeTextChange(output *strings.Builder, number int, change diff.Change) {
 	if representative != nil && representative.ExactFingerprint != "" {
 		exactFingerprint = representative.ExactFingerprint
 	}
-	fmt.Fprintf(output, "  Representative exact fingerprint: %s\n", exactFingerprint)
+	fmt.Fprintf(output, "  Representative exact fingerprint: %s\n", escapeTextScalar(exactFingerprint))
 	fmt.Fprintf(output, "  Before sites: %d\n", len(change.BeforeGroups))
 	fmt.Fprintf(output, "  After sites: %d\n", len(change.AfterGroups))
 }

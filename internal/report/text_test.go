@@ -8,6 +8,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"unicode"
 
 	pprofprofile "github.com/google/pprof/profile"
 
@@ -136,6 +137,102 @@ func TestWriteTextInlineUserLocation(t *testing.T) {
 		}
 		previous = index
 	}
+}
+
+func TestEscapeTextScalar(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{name: "printable UTF-8", value: "plain 雪🙂", want: "plain 雪🙂"},
+		{name: "backslashes", value: `C:\temp\profile`, want: `C:\\temp\\profile`},
+		{
+			name:  "controls",
+			value: "line\nreturn\rcolumn\tend\x00\x1b\x7f\u0085\u2028\u2029\u202e\U0001d173",
+			want:  `line\nreturn\rcolumn\tend\x00\x1b\x7f\u0085\u2028\u2029\u202e\U0001d173`,
+		},
+		{name: "invalid UTF-8", value: string([]byte{'a', 0xff, 0xc0, 'b'}), want: `a\xff\xc0b`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := escapeTextScalar(test.value); got != test.want {
+				t.Fatalf("escapeTextScalar(%q) = %q, want %q", test.value, got, test.want)
+			}
+		})
+	}
+}
+
+func TestWriteTextEscapesSerializedProfileFields(t *testing.T) {
+	input := chanReceiveProfile([]int{0})
+	input.Function[3].Name = "github.com/acme/worker.run\n\x1b[31m\\tail"
+	input.Function[3].Filename = "/src/worker\r\t\x1b[2J.go"
+	input.Sample[0].Label = map[string][]string{
+		"tenant\n\x1b": {"value\r\t\\path"},
+	}
+
+	source := "https://example.test/profile\n\x1b[2J" + string([]byte{0xff})
+	analysis, got := renderSerializedProfile(t, source, input)
+	for _, want := range []string{
+		`Source: https://example.test/profile\n\x1b[2J\xff`,
+		`  User frame: worker.run\n\x1b[31m\\tail (worker\r\t\x1b[2J.go:87)`,
+		`    - tenant\n\x1b: present=10 missing=0`,
+		`      - value\r\t\\path: 10`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("WriteText() missing escaped profile fragment %q:\n%s", want, got)
+		}
+	}
+	assertTextContainsNoUnsafeControl(t, got)
+	if repeated := renderAnalysis(t, analysis); repeated != got {
+		t.Fatalf("WriteText() changed across identical escaped analysis runs")
+	}
+}
+
+func TestWriteTextEscapesAllDynamicGroupScalars(t *testing.T) {
+	userFrame := profile.Frame{Function: "example.test/user\nframe", File: "/src/user\r.go", Line: 7}
+	analysis := analyze.Analysis{
+		Source: "source.pprof",
+		Total:  1,
+		Groups: []analyze.Group{{
+			Count:               1,
+			ExactFingerprint:    "exact\n\x1b",
+			SemanticFingerprint: "semantic\r\\value",
+			Blocker: analyze.Blocker{
+				Kind:             analyze.BlockerKind("custom\tblocker"),
+				EvidenceFunction: "example.test/evidence\nfunction",
+			},
+			UserFrame: &userFrame,
+			Stack:     []profile.Frame{userFrame},
+			Labels: []analyze.LabelKeySummary{{
+				Key:     "key\u2028value",
+				Present: 1,
+				Values:  []analyze.LabelValueCount{{Value: "label\u202evalue", Count: 1}},
+			}},
+			Findings: []analyze.Finding{{
+				Kind:    analyze.FindingKind("custom\nkind"),
+				Code:    "code\x00value",
+				Message: "message\x1b[2J",
+			}},
+		}},
+	}
+
+	got := renderAnalysis(t, analysis)
+	for _, want := range []string{
+		`  Exact fingerprint: exact\n\x1b`,
+		`  Semantic fingerprint: semantic\r\\value`,
+		`  Blocker: custom\tblocker`,
+		`  Evidence: evidence\nfunction`,
+		`  User frame: user\nframe (user\r.go:7)`,
+		`    - key\u2028value: present=1 missing=0`,
+		`      - label\u202evalue: 1`,
+		`    - custom\nkind code\x00value: message\x1b[2J`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("WriteText() missing escaped group fragment %q:\n%s", want, got)
+		}
+	}
+	assertTextContainsNoUnsafeControl(t, got)
 }
 
 func TestTextDisplayHelpers(t *testing.T) {
@@ -307,6 +404,18 @@ func renderAnalysis(t *testing.T, analysis analyze.Analysis) string {
 		t.Fatalf("WriteText() error = %v", err)
 	}
 	return output.String()
+}
+
+func assertTextContainsNoUnsafeControl(t *testing.T, value string) {
+	t.Helper()
+	for offset, r := range value {
+		if r == '\n' {
+			continue
+		}
+		if unicode.IsControl(r) || unicode.Is(unicode.Cf, r) || r == '\u2028' || r == '\u2029' {
+			t.Fatalf("text report contains unsafe control U+%04X at byte offset %d", r, offset)
+		}
+	}
 }
 
 func readGolden(t *testing.T, name string) string {

@@ -16,7 +16,7 @@ func WriteText(w io.Writer, analysis analyze.Analysis) error {
 
 	var output strings.Builder
 	output.WriteString("LEAKVIZ ANALYSIS\n")
-	fmt.Fprintf(&output, "Source: %s\n", displaySource(analysis.Source))
+	fmt.Fprintf(&output, "Source: %s\n", escapeTextScalar(displaySource(analysis.Source)))
 	fmt.Fprintf(&output, "Total: %d\n", analysis.Total)
 	fmt.Fprintf(&output, "Groups: %d\n", len(analysis.Groups))
 
@@ -39,15 +39,15 @@ func WriteText(w io.Writer, analysis analyze.Analysis) error {
 func writeTextGroup(output *strings.Builder, number int, group analyze.Group) {
 	fmt.Fprintf(output, "Group %d\n", number)
 	fmt.Fprintf(output, "  Count: %d\n", group.Count)
-	fmt.Fprintf(output, "  Exact fingerprint: %s\n", group.ExactFingerprint)
-	fmt.Fprintf(output, "  Semantic fingerprint: %s\n", group.SemanticFingerprint)
-	fmt.Fprintf(output, "  Blocker: %s\n", group.Blocker.Kind)
+	fmt.Fprintf(output, "  Exact fingerprint: %s\n", escapeTextScalar(group.ExactFingerprint))
+	fmt.Fprintf(output, "  Semantic fingerprint: %s\n", escapeTextScalar(group.SemanticFingerprint))
+	fmt.Fprintf(output, "  Blocker: %s\n", escapeTextScalar(string(group.Blocker.Kind)))
 
 	evidence := "-"
 	if group.Blocker.EvidenceFunction != "" {
 		evidence = shortFunction(group.Blocker.EvidenceFunction)
 	}
-	fmt.Fprintf(output, "  Evidence: %s\n", evidence)
+	fmt.Fprintf(output, "  Evidence: %s\n", escapeTextScalar(evidence))
 
 	output.WriteString("  User frame: ")
 	if group.UserFrame == nil || group.UserFrame.Function == "" {
@@ -56,8 +56,8 @@ func writeTextGroup(output *strings.Builder, number int, group analyze.Group) {
 		fmt.Fprintf(
 			output,
 			"%s (%s:%d)\n",
-			shortFunction(group.UserFrame.Function),
-			displayBase(group.UserFrame.File),
+			escapeTextScalar(shortFunction(group.UserFrame.Function)),
+			escapeTextScalar(displayBase(group.UserFrame.File)),
 			group.UserFrame.Line,
 		)
 	}
@@ -67,8 +67,8 @@ func writeTextGroup(output *strings.Builder, number int, group analyze.Group) {
 		fmt.Fprintf(
 			output,
 			"    - %s (%s:%d)",
-			shortFunction(frame.Function),
-			displayBase(frame.File),
+			escapeTextScalar(shortFunction(frame.Function)),
+			escapeTextScalar(displayBase(frame.File)),
 			frame.Line,
 		)
 		if frame.Inlined {
@@ -85,12 +85,12 @@ func writeTextGroup(output *strings.Builder, number int, group analyze.Group) {
 			fmt.Fprintf(
 				output,
 				"    - %s: present=%d missing=%d\n",
-				label.Key,
+				escapeTextScalar(label.Key),
 				label.Present,
 				label.Missing,
 			)
 			for _, value := range label.Values {
-				fmt.Fprintf(output, "      - %s: %d\n", value.Value, value.Count)
+				fmt.Fprintf(output, "      - %s: %d\n", escapeTextScalar(value.Value), value.Count)
 			}
 		}
 	}
@@ -103,9 +103,9 @@ func writeTextGroup(output *strings.Builder, number int, group analyze.Group) {
 			fmt.Fprintf(
 				output,
 				"    - %s %s: %s\n",
-				textFindingKind(finding.Kind),
-				finding.Code,
-				finding.Message,
+				escapeTextScalar(textFindingKind(finding.Kind)),
+				escapeTextScalar(finding.Code),
+				escapeTextScalar(finding.Message),
 			)
 		}
 	}

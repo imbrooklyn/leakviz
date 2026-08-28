@@ -7,7 +7,6 @@ import (
 	"io"
 
 	"github.com/imbrooklyn/leakviz/internal/analyze"
-	"github.com/imbrooklyn/leakviz/internal/profile"
 )
 
 const (
@@ -106,7 +105,7 @@ func newAnalysisJSON(analysis analyze.Analysis) analysisJSON {
 func newGroupJSON(group analyze.Group) groupJSON {
 	stack := make([]frameJSON, len(group.Stack))
 	for index, frame := range group.Stack {
-		stack[index] = newFrameJSON(frame)
+		stack[index] = newFrameJSON(frame.Function, frame.File, frame.Line, frame.Inlined)
 	}
 
 	labels := make([]labelKeyJSON, len(group.Labels))
@@ -134,7 +133,12 @@ func newGroupJSON(group analyze.Group) groupJSON {
 
 	var userFrame *frameJSON
 	if group.UserFrame != nil {
-		converted := newFrameJSON(*group.UserFrame)
+		converted := newFrameJSON(
+			group.UserFrame.Function,
+			group.UserFrame.File,
+			group.UserFrame.Line,
+			group.UserFrame.Inlined,
+		)
 		userFrame = &converted
 	}
 
@@ -153,11 +157,11 @@ func newGroupJSON(group analyze.Group) groupJSON {
 	}
 }
 
-func newFrameJSON(frame profile.Frame) frameJSON {
+func newFrameJSON(function, file string, line int64, inlined bool) frameJSON {
 	return frameJSON{
-		Function: frame.Function,
-		File:     frame.File,
-		Line:     frame.Line,
-		Inlined:  frame.Inlined,
+		Function: function,
+		File:     file,
+		Line:     line,
+		Inlined:  inlined,
 	}
 }

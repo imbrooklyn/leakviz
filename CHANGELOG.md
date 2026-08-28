@@ -22,6 +22,8 @@ limitations.
 
 ### Safety and compatibility
 
+- Text reports render profile-derived control characters and invalid UTF-8
+  bytes as visible escape sequences; JSON uses standard string escaping.
 - Reports preserve profile labels, which may contain sensitive data.
 - Runtime reachability can produce false negatives; an empty report does not
   prove that an application has no goroutine leaks.

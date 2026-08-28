@@ -1,13 +1,13 @@
 # Go 1.27 blocker symbol fixture
 #
 # Toolchain observation: go version go1.27.0 darwin/arm64.
-# Review method:
-# - Reviewed src/cmd/compile/internal/walk/select.go for zero-case and general
-#   select lowering, and src/runtime/select.go for the called runtime functions.
-# - Compiled noinline two-case and zero-case select probes with
+# Validation evidence:
+# - Go 1.27 zero-case and general select lowering sources are
+#   src/cmd/compile/internal/walk/select.go and src/runtime/select.go.
+# - Noinline two-case and zero-case select probes compiled with
 #   `go tool compile -N -l -S`; the calls were runtime.selectgo and runtime.block.
-# - Reviewed src/sync/rwmutex.go for its reader/writer semaphore calls and
-#   src/sync/mutex.go plus src/internal/sync/mutex.go for the outlined lock path.
+# - Go 1.27 synchronization sources are src/sync/rwmutex.go,
+#   src/sync/mutex.go, and src/internal/sync/mutex.go.
 # These are exact symbols. The fixture does not authorize prefix matching.
 toolchain=go1.27.0
 platform=darwin/arm64
