@@ -2,6 +2,22 @@
 
 This file records notable user-visible changes to `leakviz`.
 
+## v0.1.1
+
+See the [v0.1.1 release notes](docs/releases/v0.1.1.md) for installation and
+compatibility details.
+
+### Fixed
+
+- Use an absolute, tag-pinned README link that resolves correctly from the
+  hosted GitHub Release page.
+
+### Compatibility
+
+- This is a documentation-only patch. CLI behavior, JSON schema v1,
+  fingerprints, dependencies, and supported inputs are unchanged from
+  v0.1.0.
+
 ## v0.1.0
 
 See the [v0.1.0 release notes](docs/releases/v0.1.0.md) for usage and important

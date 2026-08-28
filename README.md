@@ -12,10 +12,10 @@ snapshots without modifying the target application or the profile.
 
 ## Install or build
 
-To install the tagged v0.1.0 module release when it is available:
+To install the latest tagged patch release:
 
 ```bash
-go install github.com/imbrooklyn/leakviz/cmd/leakviz@v0.1.0
+go install github.com/imbrooklyn/leakviz/cmd/leakviz@v0.1.1
 ```
 
 To build the current source checkout:
@@ -27,7 +27,7 @@ go build -o ./bin/leakviz ./cmd/leakviz
 ```
 
 A source-checkout build reports `leakviz devel`. A build installed from the
-`v0.1.0` module tag reports `leakviz v0.1.0` through Go build information.
+`v0.1.1` module tag reports `leakviz v0.1.1` through Go build information.
 
 ## Analyze a snapshot
 
